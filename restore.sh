@@ -1,11 +1,31 @@
 #!/bin/bash
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <directory_to_monitor> <quarantine_directory>"
+    exit 1
+fi
 
 dir="$1"
 malicious_dir="$2"
 
+if [ ! -d "$dir" ]; then
+    echo "Error: Directory '$dir' does not exist."
+    exit 1
+fi
+
+# Validate the quarantine directory.
+if [ ! -d "$malicious_dir" ]; then
+    echo "Error: Quarantine directory '$malicious_dir' does not exist."
+    exit 1
+fi
+
 while true; do
 
-    files=("$malicious_dir"/*)
+    files=()
+    for file in "$malicious_dir"/*; do
+        if [ -f "$file" ]; then
+            files+=("$file")
+        fi
+    done
 
     if [ ! -e "${files[0]}" ]; then
         echo "No malicious files to review."
@@ -13,51 +33,73 @@ while true; do
     fi
 
     echo "Files in quarantine:"
-
-    i=1
-
-    for file in "${files[@]}"; do
-        if [ -f "$file" ]; then
-            echo "$i. $(basename "$file")"
-            i=$((i + 1))
-        fi
+    for i in "${!files[@]}"; do
+        filename=$(basename "${files[$i]}")
+        echo "$((i + 1)): $filename"
     done
+    
+    read -r -p "Choose a file: " choice
 
-    echo "Enter the number of the file you want to review:"
-    read choice
-
-    selected_file="${files[$((choice - 1))]}"
-
-    if [ ! -f "$selected_file" ]; then
-        echo "Invalid selection."
+  
+    if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
+        echo "Invalid selection. Please enter a number."
         continue
     fi
 
+    if [ "$choice" -lt 1 ] || [ "$choice" -gt "${#files[@]}" ]; then
+        echo "Invalid selection. Please choose a number from the list."
+        continue
+    fi
+    
+    selected_file="${files[$((choice - 1))]}"
     filename=$(basename "$selected_file")
 
-    echo "1. Restore this file back into dir"
-    echo "2. Permanently delete this file from malicious_dir"
-    echo "3. Leave this file as-is and go back to the list"
+    
+    echo "For $filename:"
+    echo "1: Restore this file back into $dir (it was a false positive)"
+    echo "2: Permanently delete this file from $malicious_dir (it was genuinely malicious)"
+    echo "3: Go back"
 
-    read option
+    read -r -p "> " option
 
     case "$option" in
+
         1)
-            cp "$selected_file" "$dir/"
-            rm "$selected_file"
-            echo "Restored $filename to $dir."
+            
+            if [ -e "$dir/$filename" ]; then
+                echo "Cannot restore: '$dir/$filename' already exists."
+                continue
+            fi
+
+            
+            if cp -- "$selected_file" "$dir/$filename"; then
+                if rm -- "$selected_file"; then
+                    echo "$filename restored to $dir."
+                else
+                    echo "Error: The file was copied back, but could not be removed from quarantine."
+                fi
+            else
+                echo "Error: Could not restore '$filename'."
+            fi
             ;;
 
         2)
-            rm "$selected_file"
-            echo "$filename permanently deleted."
+            # Permanently remove the selected file from quarantine.
+            if rm -- "$selected_file"; then
+                echo "$filename permanently deleted."
+            else
+                echo "Error: Could not delete '$filename'."
+            fi
             ;;
 
         3)
+            # Return to the list of quarantined files.
+            continue
             ;;
 
         *)
-            echo "Invalid option."
+            echo "Invalid option. Please choose 1, 2, or 3."
             ;;
     esac
+
 done
