@@ -148,8 +148,4 @@ it regenerates `directory-info.last` from the current directory contents.
 This ensures that the saved snapshot reflects the directory after suspicious
 files have been removed.
 
-## 8. Disclaimer
 
-This project is an educational exercise demonstrating Bash scripting,
-directory monitoring, file classification, and quarantine management.
-It is not a replacement for professional antivirus software.
