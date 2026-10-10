@@ -4,7 +4,7 @@ INTERVAL = 5
 
 .PHONY: all setup antivirus restore clean
 
-all: antivirus
+all: setup
 
 setup:
 	mkdir -p $(DIR)
