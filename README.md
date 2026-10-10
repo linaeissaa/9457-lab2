@@ -1,104 +1,77 @@
-# Simple Antivirus Daemon
+# Linux Antivirus and File Quarantine System
 
-## 1. Project Description
+## 1. Project Overview
 
-This project implements a simple antivirus daemon using Bash scripting on Linux.
+This project implements a simple antivirus-style monitoring system using Bash scripting on Linux.
 
-The daemon periodically monitors a specified directory, checks files for suspicious
-extensions and keywords, and moves suspicious files into a quarantine directory.
-A separate script allows the user to review quarantined files, restore false
-positives, or permanently delete files considered malicious.
+The system continuously monitors a specified directory for suspicious files. It identifies potentially malicious files by checking their extensions and contents, moves detected files into a quarantine directory, and provides an interactive tool to restore files or permanently delete them.
+
+The project demonstrates the use of Bash scripting, file management, directory monitoring, conditional statements, loops, functions, and Linux command-line utilities.
 
 ## 2. Project Objectives
 
-- Learn how to write and execute Bash shell scripts.
-- Monitor a directory periodically.
-- Detect directory changes by comparing snapshots.
-- Identify suspicious files by their final extension or content.
-- Move suspicious files into a quarantine directory.
-- Restore files that were incorrectly flagged.
-- Permanently delete quarantined files.
-- Use a Makefile to organize and run project tasks.
+The main objectives are to:
 
-## 3. Files and Directories
+- Monitor a specified directory for changes.
+- Detect suspicious files based on their extensions or contents.
+- Copy suspicious files into a quarantine directory while preserving their original filenames.
+- Delete the original files only after successful copying.
+- Allow users to restore quarantined files that were incorrectly flagged.
+- Allow users to permanently delete files identified as genuinely malicious.
+- Handle invalid inputs and file-operation errors.
 
-### Folder hierarchy
+## 3. Project Structure
 
-```
+The project contains the following files and directories:
+
+```text
 9457-lab2/
-├── antivirusd.sh         # daemon: monitors a directory and quarantines malicious files
-├── restore.sh            # interactive tool to restore or permanently delete quarantined files
-├── Makefile              # targets: setup, antivirus, restore, clean
-├── README.md             # this file
-├── testdir/              # example directory to monitor (files only, no subdirectories)
-├── malicious_dir/        # quarantine directory
-├── directory-info.last   # generated at runtime: most recent snapshot
-└── directory-info.new    # generated at runtime: new snapshot used for comparison
+├── antivirusd.sh
+├── restore.sh
+├── Makefile
+├── README.md
+├── testdir/
+├── malicious_dir/
+├── directory-info.last
+└── directory-info.new
 ```
 
-### Description of each item
+### File descriptions
 
-- `antivirusd.sh`: Continuously monitors the specified directory and quarantines suspicious files.
-- `restore.sh`: Provides an interactive menu to restore or permanently delete quarantined files.
-- `Makefile`: Provides targets to prepare directories, run the scripts, and remove snapshot files.
-- `directory-info.last`: Stores the most recent directory snapshot.
-- `directory-info.new`: Stores a newly generated directory snapshot for comparison.
-- `testdir/`: Example directory to monitor.
-- `malicious_dir/`: Directory where suspicious files are quarantined.
+| File or directory | Description |
+|---|---|
+| `antivirusd.sh` | Scans and monitors the specified directory for suspicious files. |
+| `restore.sh` | Provides an interactive menu for restoring or permanently deleting quarantined files. |
+| `Makefile` | Automates directory setup and execution of the scripts. |
+| `README.md` | Documents the project, its functionality, and usage instructions. |
+| `testdir/` | The default directory monitored by the antivirus. |
+| `malicious_dir/` | The default quarantine directory for detected files. |
+| `directory-info.last` | Stores the previous directory snapshot. |
+| `directory-info.new` | Stores the latest directory snapshot for comparison. |
 
-The monitored directory is assumed to contain only files, with no subdirectories.
+The snapshot files are generated automatically when the antivirus runs.
 
-## 4. Requirements
+## 4. Detection Rules
 
-- Linux operating system or a Linux virtual machine.
-- Bash.
-- GNU Make.
-- Standard Linux utilities, including `grep`, `diff`, `ls`, `cp`, and `rm`.
+The antivirus identifies suspicious files using two methods.
 
-On Ubuntu, install Make if it is not already installed:
+### 4.1. Suspicious file extensions
 
-    sudo apt update
-    sudo apt install make
+The following file extensions are flagged:
 
-Check the installed versions:
+- `exe`
+- `bat`
+- `vbs`
+- `scr`
+- `ps1`
 
-    bash --version
-    make --version
+Extension matching is case-insensitive. For example, both `program.exe` and `program.EXE` are flagged.
 
-## 5. Suspicious File Rules
+The antivirus checks the final file extension.
 
-A file is considered malicious if it matches at least one of the two rules below.
+### 4.2. Suspicious keywords
 
-### Where the flagged lists are defined
-
-Both required lists are hardcoded, exactly as specified in the lab, near the top of
-`antivirusd.sh`:
-
-    flagged_extensions=("exe" "bat" "vbs" "scr" "ps1")
-    flagged_keywords=("virus" "trojan" "malware" "worm" "ransomware")
-
-### Suspicious extensions
-
-The following final extensions are considered suspicious:
-
-- `.exe`
-- `.bat`
-- `.vbs`
-- `.scr`
-- `.ps1`
-
-Only the final extension is checked.
-
-For example:
-
-- `file.txt.scr` is flagged by its extension.
-- `file.scr.txt` is not flagged by its extension.
-- `file.exec` is not flagged by its extension.
-- A file with no dot in its name (for example `exe`) has no extension and is not flagged by extension.
-
-### Suspicious keywords
-
-The script searches file contents for the following keywords:
+The antivirus also searches file contents for the following keywords:
 
 - `virus`
 - `trojan`
@@ -106,98 +79,286 @@ The script searches file contents for the following keywords:
 - `worm`
 - `ransomware`
 
-Keyword matching is case-insensitive and matches the keyword anywhere in the file content.
+Keyword matching is case-insensitive.
 
-For example, `WORM` and `wormhole` match the keyword `worm` when they occur in the file content.
-The file name itself is not searched, only the content.
+For example, a file containing the word `WORM` or `Ransomware` is flagged even if its extension is not suspicious.
 
-## 6. How to Run the Project
+**Important:** These rules are basic detection rules for an educational project. They do not provide comprehensive malware detection.
 
-### Step 1: Prepare the directories
+## 5. How the Antivirus Works
 
-Run:
+The `antivirusd.sh` script follows these steps:
 
-    make setup
+1. Validates the command-line arguments.
+2. Checks that the monitored directory exists.
+3. Validates the monitoring interval.
+4. Creates the quarantine directory if necessary.
+5. Performs an initial scan of the monitored directory.
+6. Checks regular files directly inside the monitored directory for suspicious extensions and keywords.
+7. Copies each detected file into `malicious_dir`, preserving its original filename.
+8. Deletes the original file only if copying succeeds.
+9. Displays a message when a file has been successfully quarantined.
+10. Creates directory snapshots and compares them at the specified interval.
+11. Scans the directory again whenever a change is detected.
 
-This creates `testdir/` and `malicious_dir/` if they do not exist.
-(`make antivirus` and `make restore` also run this step automatically.)
+If a file with the same name already exists in the quarantine directory, the script reports an error and keeps the original file.
 
-### Step 2: Add test files
+If copying a suspicious file fails, the original is also kept.
 
-Place files you want to test inside `testdir/`.
+### Example output
+
+```text
+Performing initial scan of 'testdir'...
+program.exe is malicious and it is DELETED
+suspicious.txt is malicious and it is DELETED
+Initial scan complete.
+Monitoring 'testdir' every 5 seconds...
+```
+
+The filenames and order of messages depend on the files present during the scan.
+
+When a change is detected, the script may display:
+
+```text
+Change detected in 'testdir'. Scanning...
+newfile.txt is malicious and it is DELETED
+Scan complete.
+```
+
+The message `is malicious and it is DELETED` is displayed after the file has been copied successfully and its original has been deleted successfully.
+
+## 6. How the Restore Tool Works
+
+The `restore.sh` script allows users to manage files in the quarantine directory.
+
+When executed, it displays the available quarantined files and asks the user to select one.
+
+The user can choose from three options:
+
+### Option 1: Restore the file
+
+Copies the selected file back into the monitored directory and removes the quarantined copy after successful copying.
+
+If a file with the same name already exists in the monitored directory, the restore operation is refused to prevent overwriting it.
+
+### Option 2: Permanently delete the file
+
+Deletes the selected file from the quarantine directory.
+
+This action is intended for files that the user has determined are genuinely malicious.
+
+### Option 3: Leave the file unchanged
+
+Leaves the selected file in quarantine and returns to the list of available files.
+
+The restore tool also handles invalid menu selections by displaying an error message and prompting the user again.
+
+If the quarantine directory becomes empty, the tool displays an appropriate message and exits.
+
+**Note:** Restoring a file does not guarantee that the antivirus will leave it alone. If the file still matches the detection rules, a subsequent scan may quarantine it again.
+
+## 7. Prerequisites
+
+The project requires:
+
+- A Linux operating system, such as Ubuntu.
+- Bash.
+- GNU utilities, including `grep`, `cp`, `rm`, `ls`, and `diff`.
+- GNU Make.
+
+These tools are normally available on standard Ubuntu installations.
+
+To check whether the required commands are available, run:
+
+```bash
+bash --version
+make --version
+```
+
+## 8. Setup Instructions
+
+### Step 1: Open the project directory
+
+Navigate to the directory containing the project files.
 
 For example:
 
-    echo "This file contains a wormhole keyword." > testdir/example.txt
-    echo "Example executable" > testdir/example.exe
-    echo "clean file" > testdir/ok.txt
+```bash
+cd ~/Desktop/9457-lab2
+```
 
-These are test examples only; do not use real malicious files.
+Use the appropriate path if your project is stored elsewhere.
 
-### Step 3: Start the antivirus daemon
+### Step 2: Create the required directories
 
 Run:
 
-    make antivirus
+```bash
+make setup
+```
 
-(Running plain `make` does the same.)
+This creates the default monitored and quarantine directories if they do not already exist.
 
-The daemon scans the directory immediately if there is no previous snapshot
-(`directory-info.last` does not exist). After that, it checks for changes every
-five seconds. If nothing changed, no scan is performed.
+The default directories are:
 
-For every malicious file found, the daemon:
+- `testdir`
+- `malicious_dir`
 
-1. Prints `<file> is malicious and it is DELETED` to the terminal.
-2. Copies the file into `malicious_dir/`, keeping its original filename.
-3. Deletes the original file from the monitored directory.
+### Step 3: Prepare test files
 
-With the test files above you should see:
+You can create sample files to test the antivirus:
 
-    example.txt is malicious and it is DELETED
-    example.exe is malicious and it is DELETED
+```bash
+echo "This is a normal document." > testdir/normal.txt
+echo "This file contains a wormhole." > testdir/suspicious.txt
+echo "Harmless test content." > testdir/program.exe
+```
 
-The interval can be changed by editing the `INTERVAL` variable in the Makefile.
+Expected behavior:
 
-Stop the daemon using `Ctrl+C`.
+- `normal.txt` remains in `testdir`.
+- `suspicious.txt` is flagged because its contents contain the keyword `worm`.
+- `program.exe` is flagged because its extension is `exe`.
 
-### Step 4: Review quarantined files
+**Warning:** Use only disposable test files when testing deletion and quarantine operations.
 
-Stop the daemon first (the daemon and the restore tool should not run at the same time).
-Then, in the project directory, run:
+## 9. Running the Antivirus
 
-    make restore
+### Using the Makefile
 
-If `malicious_dir/` is empty, the tool prints `No malicious files to review.` and exits.
-Otherwise it shows a numbered list of quarantined files. Choose a file by its number,
-then select one of the available options:
+Run:
 
-1. Restore the file to the monitored directory (it was a false positive).
-   Prints `Restored <file> to <dir>.`
-2. Permanently delete the file from the quarantine directory (it was genuinely malicious).
-   Prints `<file> permanently deleted.`
-3. Leave the file as-is and go back to the list.
+```bash
+make antivirus
+```
 
-### Step 5: Remove snapshot files
+The Makefile uses the following default values:
 
-To remove the snapshot files, run:
+```makefile
+DIR = testdir
+MALICIOUS_DIR = malicious_dir
+INTERVAL = 5
+```
 
-    make clean
+This monitors `testdir`, quarantines suspicious files in `malicious_dir`, and checks for directory changes every five seconds.
 
-This does not remove files from `testdir/` or `malicious_dir/`.
+The antivirus performs an initial scan before beginning continuous monitoring.
 
-## 7. Implementation Notes
+To stop the antivirus, press:
 
-The antivirus daemon generates a current snapshot using:
+```text
+Ctrl+C
+```
 
-    ls -l "$dir" > directory-info.new
+### Running the script directly
 
-It compares the new snapshot with `directory-info.last` using `diff`.
+The script accepts three command-line arguments:
 
-When a change is detected, the daemon scans the directory. After the scan,
-it regenerates `directory-info.last` from the current directory contents.
-This ensures that the saved snapshot reflects the directory after suspicious
-files have been removed.
+```bash
+./antivirusd.sh <directory_to_monitor> <quarantine_directory> <interval-seconds>
+```
 
-Because `ls -l` shows modification times only to the minute, an in-place edit that
-keeps the same file size within the same minute may not be detected as a change.
+For example:
+
+```bash
+./antivirusd.sh testdir malicious_dir 5
+```
+
+This command monitors `testdir`, uses `malicious_dir` as the quarantine directory, and sets the monitoring interval to five seconds.
+
+The interval must be a positive integer.
+
+## 10. Running the Restore Tool
+
+To launch the restore tool using the default directories, run:
+
+```bash
+make restore
+```
+
+Alternatively, execute the script directly:
+
+```bash
+./restore.sh testdir malicious_dir
+```
+
+The script displays the files in quarantine and allows the user to select a file and choose an action.
+
+If there are no files in quarantine, the script informs the user and exits.
+
+## 11. Cleaning Up
+
+To remove the directory snapshot files, run:
+
+```bash
+make clean
+```
+
+This removes:
+
+```text
+directory-info.last
+directory-info.new
+```
+
+It does not delete files from `testdir` or `malicious_dir`.
+
+To remove the test files manually, first stop the antivirus and make sure you do not need any files in the test directories.
+
+For example, to remove regular files from the default test directories:
+
+```bash
+rm -f testdir/*
+rm -f malicious_dir/*
+```
+
+**Warning:** These commands permanently delete the matching regular files in those directories. Use them only if you are certain the files can be discarded.
+
+## 12. Testing and Verification
+
+The following tests can be used to verify the main functionality.
+
+| Test | Expected result |
+|---|---|
+| A normal `.txt` file with no suspicious keywords | The file remains in the monitored directory. |
+| A file with a suspicious extension, such as `.exe` | The file is flagged and quarantined. |
+| A `.txt` file containing a suspicious keyword | The file is flagged and quarantined. |
+| A suspicious file is successfully copied to quarantine | The original is deleted, and the quarantined copy retains the original filename. |
+| Copying a suspicious file fails | The original file is kept. |
+| A file with the same name already exists in quarantine | The existing quarantined file is not overwritten, and the original is kept. |
+| A suspicious file is added while monitoring is running | The file is detected during a subsequent scan after a directory change is detected. |
+| A user restores a quarantined file | The file is copied back to the monitored directory, and the quarantined copy is removed if the operation succeeds. |
+| A user permanently deletes a quarantined file | The selected file is removed from quarantine. |
+| A user enters an invalid selection in the restore menu | An error message is displayed, and the user is prompted again. |
+
+To check shell syntax, run:
+
+```bash
+bash -n antivirusd.sh
+bash -n restore.sh
+```
+
+If both commands finish without output, no Bash syntax errors were reported.
+
+## 13. Limitations
+
+This project is a basic educational antivirus simulation, not a production security application.
+
+Its limitations include:
+
+- Detection depends entirely on the configured extensions and keywords.
+- Legitimate files may be flagged if they match the detection rules.
+- Malicious files that do not match the rules may not be detected.
+- The antivirus monitors regular files directly inside the specified directory; it does not recursively scan subdirectories.
+- Directory snapshots are used to detect changes. This approach is less reliable than dedicated filesystem monitoring tools and may not detect every possible change.
+- The script does not provide advanced malware analysis, cryptographic verification, or real-time security guarantees.
+
+These limitations should be considered when interpreting the results.
+
+## 14. Conclusion
+
+This project demonstrates how Bash scripting and standard Linux utilities can be used to implement a simple file-monitoring and quarantine system.
+
+It supports basic suspicious-file detection, quarantine management, interactive file restoration, permanent deletion, input validation, and continuous directory monitoring.
+
+The project provides practical experience with Linux commands, shell scripting, file operations, automation using Makefiles, and error handling.
